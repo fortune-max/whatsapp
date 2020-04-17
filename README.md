@@ -17,7 +17,7 @@ Requirements / Dependencies
 Or run these lines on Termux in turn
 
 >
-    pkg install tsu python
+    pkg install git tsu python
     git clone https://github.com/lordfme/whatsapp
     cd whatsapp
     chmod 755 *
