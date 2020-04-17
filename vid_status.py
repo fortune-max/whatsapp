@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/env python2
+#!/data/data/com.termux/files/usr/bin/env python
 
 import sqlite3, sys, os
 
