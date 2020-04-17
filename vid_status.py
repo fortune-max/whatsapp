@@ -1,11 +1,11 @@
-#!/system/xbin/python
+#!data/data/com.termux/files/usr/bin/env python2
 
 import sqlite3, sys, os
 
-#set WhatsApp Database directory here, uses current directory on failure
+# set WhatsApp Database directory here, uses current directory on failure
 DB_DIR = "/data/data/com.whatsapp/databases/"
 
-whitelist = {"2348172839121"}
+whitelist = {"23489848747274"} # Modify this to include numbers to never disable
 
 def disable_video():
    count = size = 0
@@ -30,29 +30,29 @@ def enable_video(whitelist_all=False):
    return (count, size)
 
 if len(sys.argv) < 2: 
-   print """
+   print ("""
       WhatsApp Status Utility built by lordfme
 
       Usage
 
-      ./vid_status.py disable [num num num ...]
+      {0} disable [num num num ...]
 
             Disable all video statuses except space separated nums
    
-            eg. ./vid_status.py disable 23483736767836 23480839776864
+            eg. {0} disable 23483736767836 23480839776864
 
-            Or to disable for everyone ./vid_status.py disable
+            Or to disable for everyone {0} disable
 
-      ./vid_status.py enable [num num num ...]
+      {0} enable [num num num ...]
 
             Enable all video statuses for all space separated nums if disabled
 
-            eg. ./vid_status.py enable 2348083727863 2341234567837
+            eg. {0} enable 2348083727863 2341234567837
 
-            Or to enable for everyone ./vid_status.py enable
+            Or to enable for everyone {0} enable
 
       Can also modify whitelist variable to add default numbers not to disable.
-   """
+   """).format(sys.argv[0])
 else:
    if not os.path.exists(DB_DIR):
       DB_DIR = "./"
