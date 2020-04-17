@@ -10,7 +10,7 @@ Requirements / Dependencies
 * Make sure Termux is installed and root access available
 * **pkg install tsu** in Termux to allow root execution of scripts
 * Most scripts are written by default in python 2.7 but should work with 3 with little to no changes
-* Modify the shebang to suit your python install, for Termux this should be **/data/data/com.termux/files/usr/bin/env python2** alternatively just run  with **python script.py [args]**
+* Modify the shebang to suit your python install, for Termux this should be **/data/data/com.termux/files/usr/bin/env python2** alternatively just run  with **python2 script.py [args]**
 * Place script.py in Termux home directory, cd to home dir and run **chmod 755 script.py** to enable execution
 * **tsu -c ./script.py** or **tsu -c python2 ./script.py**
 
@@ -27,4 +27,4 @@ Vid Status
 ---
 For disabling and enabling WhatsApp video status broadcasts.
 
-Ensure DB_DIR is correct and edit whitelist set to include numbers you want unaffected then run.
+Ensure DB_DIR is correct and edit whitelist set to include numbers you want unaffected then run. (Script both 2 and 3 compatible)
