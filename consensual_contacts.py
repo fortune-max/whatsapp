@@ -18,10 +18,10 @@ DB_FILE_WA = DB_DIR + "wa.db"
 DB_FILE_AXOLOTL = DB_DIR + "axolotl.db"
 
 if os.path.exists(DB_FILE_AXOLOTL) and os.path.exists(DB_FILE_WA):
-    conn=sqlite3.connect("axolotl.db")
+    conn=sqlite3.connect(DB_FILE_AXOLOTL)
     status_cands = set([str(x[0]) for x in conn.cursor().execute('SELECT sender_id FROM sender_keys WHERE group_id="status@broadcast"').fetchall()])
 
-    conn=sqlite3.connect("wa.db")
+    conn=sqlite3.connect(DB_FILE_WA)
     listed_contacts = set([str(x[0].strip("@s.whatsapp.net")) for x in conn.cursor().execute('SELECT jid FROM wa_contacts WHERE sort_name IS NOT NULL').fetchall()])
 
     not_saved_by_me = status_cands - listed_contacts
