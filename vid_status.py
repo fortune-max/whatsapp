@@ -7,29 +7,37 @@ DB_DIR = "/data/data/com.whatsapp/databases/"
 
 whitelist = {"23489848747274"} # Modify this to include numbers to never disable
 
+STATUS_PRFX = "STATUS_MSG: " # Message caption to discriminate status vs regular msg
+
 def disable_video():
    count = size = 0
-   for (_id, remote_resource, media_size) in video_statuses:
+   for (_id, key_remote_jid, media_size, media_caption, remote_resource) in video_statuses:
       if remote_resource.strip("@s.whatsapp.net") not in whitelist:
-         if remote_resource[0] != "X" :
-            remote_resource = "X" + remote_resource
+         if not media_caption.startswith(STATUS_PRFX):
+            key_remote_jid = remote_resource
+            media_caption = STATUS_PRFX + media_caption
+            remote_resource = None
             count += 1
             size += media_size
-            conn.cursor().execute('UPDATE messages SET _id=?, remote_resource=? WHERE _id=?', (_id, remote_resource, _id))
+            conn.cursor().execute('UPDATE messages SET key_remote_jid=?, media_caption=?, remote_resource=? WHERE _id=?',
+                                  (key_remote_jid, media_caption, remote_resource, _id))
    return (count, size)
 
 def enable_video(whitelist_all=False):
    count = size = 0
-   for (_id, remote_resource, media_size) in video_statuses:
-      if whitelist_all or (remote_resource.strip("@s.whatsapp.net")[1:] in whitelist):
-         if remote_resource[0] == "X":
-            remote_resource = remote_resource[1:]
+   for (_id, key_remote_jid, media_size, media_caption, remote_resource) in video_statuses:
+      if whitelist_all or (key_remote_jid.strip("@s.whatsapp.net") in whitelist):
+         if media_caption.startswith(STATUS_PRFX):
+            remote_resource = key_remote_jid
+            media_caption = media_caption.lstrip(STATUS_PRFX)
+            key_remote_jid = "status@broadcast"
             count += 1
             size += media_size
-            conn.cursor().execute('UPDATE messages SET _id=?, remote_resource=? WHERE _id=?', (_id, remote_resource, _id))
+            conn.cursor().execute('UPDATE messages SET key_remote_jid=?, media_caption=?, remote_resource=? WHERE _id=?',
+                                  (key_remote_jid, media_caption, remote_resource, _id))
    return (count, size)
 
-if len(sys.argv) < 2: 
+if len(sys.argv) < 2:
    print ("""
       WhatsApp Status Utility built by lordfme
 
@@ -59,14 +67,20 @@ else:
    DB_FILE = DB_DIR + "msgstore.db"
    if os.path.exists(DB_FILE):
       conn=sqlite3.connect(DB_FILE)
-      video_statuses = conn.cursor().execute('SELECT _id, remote_resource, media_size FROM messages WHERE key_remote_jid="status@broadcast" AND media_mime_type="video/mp4"').fetchall();
-   
       cmd, nums = sys.argv[1], sys.argv[2:]
       whitelist |= set(nums)
       if cmd == "disable":
+         video_statuses = conn.cursor().execute(
+            'SELECT _id, key_remote_jid, media_size, media_caption, remote_resource\
+            FROM messages WHERE key_remote_jid="status@broadcast" AND media_mime_type="video/mp4"'
+         ).fetchall()
          (count, size) = disable_video()
          conn.commit()
       elif cmd == "enable":
+         video_statuses = conn.cursor().execute(
+            'SELECT _id, key_remote_jid, media_size, media_caption, remote_resource\
+            FROM messages WHERE media_mime_type="video/mp4" AND media_caption LIKE "{0}%"'.format(STATUS_PRFX)
+         ).fetchall()
          (count, size) = enable_video(not nums)
          conn.commit()
 
