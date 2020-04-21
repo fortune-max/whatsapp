@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
-import sqlite3, sys, os
+import sqlite3, sys, os, time
 
 # set WhatsApp Database directory here, uses current directory on failure
 DB_DIR = "/data/data/com.whatsapp/databases/"
@@ -25,9 +25,9 @@ def disable_video():
 
 def enable_video(whitelist_all=False):
    count = size = 0
-   for (_id, key_remote_jid, media_size, media_caption, remote_resource) in video_statuses:
+   for (_id, key_remote_jid, timestamp, media_size, media_caption, remote_resource) in video_statuses:
       if whitelist_all or (key_remote_jid.strip("@s.whatsapp.net") in whitelist):
-         if media_caption.startswith(STATUS_PRFX):
+         if media_caption and media_caption.startswith(STATUS_PRFX):
             remote_resource = key_remote_jid
             media_caption = None if media_caption == STATUS_PRFX else media_caption.lstrip(STATUS_PRFX)
             key_remote_jid = "status@broadcast"
@@ -77,9 +77,10 @@ else:
          (count, size) = disable_video()
          conn.commit()
       elif cmd == "enable":
+         PREV_DAY = str(time.time()-86400).split('.')[0] + "000"
          video_statuses = conn.cursor().execute(
-            'SELECT _id, key_remote_jid, media_size, media_caption, remote_resource\
-            FROM messages WHERE media_mime_type="video/mp4" AND media_caption LIKE "{0}%"'.format(STATUS_PRFX)
+            'SELECT _id, key_remote_jid, timestamp, media_size, media_caption, remote_resource\
+            FROM messages WHERE timestamp > {0} AND media_mime_type="video/mp4" AND media_caption LIKE "{1}%"'.format(PREV_DAY, STATUS_PRFX)
          ).fetchall()
          (count, size) = enable_video(not nums)
          conn.commit()
