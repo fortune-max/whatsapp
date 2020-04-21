@@ -20,7 +20,6 @@ def disable_video():
             key_remote_jid = status_pool
             media_caption = media_caption if media_caption else ""
             media_caption = "%s|%s|%s"%(STATUS_PRFX, sent_from, media_caption)
-            print (media_caption)
             remote_resource = None
             count += 1
             size += media_size
@@ -37,7 +36,6 @@ def enable_video(whitelist_all=False):
             remote_resource = sent_from.lstrip("wa.me/") + "@s.whatsapp.net"
             media_caption = "".join(media_caption.split('|')[2:])
             media_caption = None if not media_caption else media_caption
-            print (media_caption)
             key_remote_jid = "status@broadcast"
             count += 1
             size += media_size
