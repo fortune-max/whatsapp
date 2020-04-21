@@ -21,7 +21,7 @@ def disable_video():
 def enable_video(whitelist_all=False):
    count = size = 0
    for (_id, remote_resource, media_size) in video_statuses:
-      if whitelist_all or (remote_resource.strip("@s.whatsapp.net") in whitelist):
+      if whitelist_all or (remote_resource.strip("@s.whatsapp.net")[1:] in whitelist):
          if remote_resource[0] == "X":
             remote_resource = remote_resource[1:]
             count += 1
