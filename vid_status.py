@@ -7,15 +7,20 @@ DB_DIR = "/data/data/com.whatsapp/databases/"
 
 whitelist = {"23489848747274"} # Modify this to include numbers to never disable
 
-STATUS_PRFX = "STATUS_MSG: " # Message caption to discriminate status vs regular msg
+STATUS_PRFX = "STATUS_MSG" # Message caption to discriminate status vs regular msg
+
+status_pool = "2348083454312@s.whatsapp.net" # Where all statuses should be stored
 
 def disable_video():
    count = size = 0
    for (_id, key_remote_jid, media_size, media_caption, remote_resource) in video_statuses:
-      if remote_resource.strip("@s.whatsapp.net") not in whitelist:
+      if remote_resource.rstrip("@s.whatsapp.net") not in whitelist:
          if (not media_caption) or (media_caption and not media_caption.startswith(STATUS_PRFX)):
-            key_remote_jid = remote_resource
-            media_caption = (STATUS_PRFX + media_caption) if media_caption else STATUS_PRFX
+            sent_from = "wa.me/" + remote_resource.rstrip("@s.whatsapp.net")
+            key_remote_jid = status_pool
+            media_caption = media_caption if media_caption else ""
+            media_caption = "%s|%s|%s"%(STATUS_PRFX, sent_from, media_caption)
+            print (media_caption)
             remote_resource = None
             count += 1
             size += media_size
@@ -25,11 +30,14 @@ def disable_video():
 
 def enable_video(whitelist_all=False):
    count = size = 0
-   for (_id, key_remote_jid, timestamp, media_size, media_caption, remote_resource) in video_statuses:
-      if whitelist_all or (key_remote_jid.strip("@s.whatsapp.net") in whitelist):
-         if media_caption and media_caption.startswith(STATUS_PRFX):
-            remote_resource = key_remote_jid
-            media_caption = None if media_caption == STATUS_PRFX else media_caption.lstrip(STATUS_PRFX)
+   for (_id, key_remote_jid, media_size, media_caption, remote_resource) in video_statuses:
+      if media_caption and media_caption.startswith(STATUS_PRFX):
+         sent_from = "".join(media_caption.split('|')[1:2])
+         if whitelist_all or (sent_from.lstrip("wa.me/") in whitelist):
+            remote_resource = sent_from.lstrip("wa.me/") + "@s.whatsapp.net"
+            media_caption = "".join(media_caption.split('|')[2:])
+            media_caption = None if not media_caption else media_caption
+            print (media_caption)
             key_remote_jid = "status@broadcast"
             count += 1
             size += media_size
@@ -77,10 +85,9 @@ else:
          (count, size) = disable_video()
          conn.commit()
       elif cmd == "enable":
-         PREV_DAY = str(time.time()-86400).split('.')[0] + "000"
          video_statuses = conn.cursor().execute(
-            'SELECT _id, key_remote_jid, timestamp, media_size, media_caption, remote_resource\
-            FROM messages WHERE timestamp > {0} AND media_mime_type="video/mp4" AND media_caption LIKE "{1}%"'.format(PREV_DAY, STATUS_PRFX)
+            'SELECT _id, key_remote_jid, media_size, media_caption, remote_resource\
+            FROM messages WHERE key_remote_jid="{0}" AND media_mime_type="video/mp4" AND media_caption LIKE "{1}%"'.format(status_pool, STATUS_PRFX)
          ).fetchall()
          (count, size) = enable_video(not nums)
          conn.commit()
