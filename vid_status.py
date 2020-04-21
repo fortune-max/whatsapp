@@ -13,9 +13,9 @@ def disable_video():
    count = size = 0
    for (_id, key_remote_jid, media_size, media_caption, remote_resource) in video_statuses:
       if remote_resource.strip("@s.whatsapp.net") not in whitelist:
-         if not media_caption.startswith(STATUS_PRFX):
+         if (not media_caption) or (media_caption and not media_caption.startswith(STATUS_PRFX)):
             key_remote_jid = remote_resource
-            media_caption = STATUS_PRFX + media_caption
+            media_caption = (STATUS_PRFX + media_caption) if media_caption else STATUS_PRFX
             remote_resource = None
             count += 1
             size += media_size
@@ -29,7 +29,7 @@ def enable_video(whitelist_all=False):
       if whitelist_all or (key_remote_jid.strip("@s.whatsapp.net") in whitelist):
          if media_caption.startswith(STATUS_PRFX):
             remote_resource = key_remote_jid
-            media_caption = media_caption.lstrip(STATUS_PRFX)
+            media_caption = None if media_caption == STATUS_PRFX else media_caption.lstrip(STATUS_PRFX)
             key_remote_jid = "status@broadcast"
             count += 1
             size += media_size
