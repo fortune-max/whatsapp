@@ -16,10 +16,9 @@ def disable_video():
    for (_id, key_remote_jid, media_size, media_caption, remote_resource) in video_statuses:
       if remote_resource.rstrip("@s.whatsapp.net") not in whitelist:
          if (not media_caption) or (media_caption and not media_caption.startswith(STATUS_PRFX)):
-            sent_from = "wa.me/" + remote_resource.rstrip("@s.whatsapp.net")
             key_remote_jid = status_pool
             media_caption = media_caption if media_caption else ""
-            media_caption = "%s|%s|%s"%(STATUS_PRFX, sent_from, media_caption)
+            media_caption = "%s|%s|%s|%s"%(STATUS_PRFX, contact_map.get(remote_resource), remote_resource, media_caption)
             remote_resource = None
             count += 1
             size += media_size
@@ -30,11 +29,11 @@ def disable_video():
 def enable_video(whitelist_all=False):
    count = size = 0
    for (_id, key_remote_jid, media_size, media_caption, remote_resource) in video_statuses:
-      if media_caption and media_caption.startswith(STATUS_PRFX):
-         sent_from = "".join(media_caption.split('|')[1:2])
-         if whitelist_all or (sent_from.lstrip("wa.me/") in whitelist):
-            remote_resource = sent_from.lstrip("wa.me/") + "@s.whatsapp.net"
-            media_caption = "".join(media_caption.split('|')[2:])
+      caption_split = media_caption.split('|')
+      if media_caption and media_caption.startswith(STATUS_PRFX) and (len(caption_split) >= 4):
+         remote_resource = caption_split[2]
+         if whitelist_all or (remote_resource.rstrip("@s.whatsapp.net") in whitelist):
+            media_caption = "".join(caption_split[3:])
             media_caption = None if not media_caption else media_caption
             key_remote_jid = "status@broadcast"
             count += 1
@@ -43,8 +42,7 @@ def enable_video(whitelist_all=False):
                                   (key_remote_jid, media_caption, remote_resource, _id))
    return (count, size)
 
-if len(sys.argv) < 2:
-   print ("""
+help_msg = """
       WhatsApp Status Utility built by lordfme
 
       Usage
@@ -66,15 +64,28 @@ if len(sys.argv) < 2:
             Or to enable for everyone {0} enable
 
       Can also modify whitelist variable to add default numbers not to disable.
-   """).format(sys.argv[0])
+   """.format(sys.argv[0])
+
+if len(sys.argv) < 2:
+   print (help_msg)
 else:
    if not os.path.exists(DB_DIR):
       DB_DIR = "./"
-   DB_FILE = DB_DIR + "msgstore.db"
-   if os.path.exists(DB_FILE):
-      conn=sqlite3.connect(DB_FILE)
+   DB_FILE_MSGSTORE = DB_DIR + "msgstore.db"
+   DB_FILE_WA = DB_DIR + "wa.db"
+   if os.path.exists(DB_FILE_MSGSTORE) and os.path.exists(DB_FILE_WA):
+      # Keep dictionary holidng contact number to name mapping
+      conn_wa = sqlite3.connect(DB_FILE_WA)
+      contacts = conn_wa.cursor().execute(
+         'SELECT jid, sort_name FROM wa_contacts WHERE sort_name IS NOT NULL'
+      ).fetchall()
+      contact_map = dict(contacts)
+      conn_wa.close()
+
+      conn = sqlite3.connect(DB_FILE_MSGSTORE)
       cmd, nums = sys.argv[1], sys.argv[2:]
       whitelist |= set(nums)
+      count, size = 0, 0
       if cmd == "disable":
          video_statuses = conn.cursor().execute(
             'SELECT _id, key_remote_jid, media_size, media_caption, remote_resource\
@@ -89,7 +100,8 @@ else:
          ).fetchall()
          (count, size) = enable_video(not nums)
          conn.commit()
-
+      else:
+         print ("unknown option, run without arguments to see help file")
       conn.close()
       print ("Done, processed %d statuses of size %.2fMB"%(count, size/1000000.0))
    else:
