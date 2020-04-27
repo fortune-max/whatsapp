@@ -20,7 +20,6 @@ Or run these lines on Termux in turn
     pkg install git tsu python
     git clone https://github.com/lordfme/whatsapp
     cd whatsapp
-    chmod 755 *
     ln -s consensual_contacts.py ../consensual_contacts.py
     ln -s vid_status.py ../vid_status.py
     cd ..
