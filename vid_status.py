@@ -18,7 +18,7 @@ status_mime_pool = {"video/mp4": "2348083454312@s.whatsapp.net", "image/jpeg": "
 
 def disable():
    count = size = 0
-   for (_id, key_remote_jid, data, media_mime_type, media_size, media_caption, remote_resource) in statuses:
+   for (_id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource) in statuses:
       if remote_resource.rstrip("@s.whatsapp.net") not in whitelist:
          if (not media_caption) or (media_caption and not media_caption.startswith(STATUS_PRFX)):
             key_remote_jid = status_mime_pool[media_mime_type]
@@ -30,13 +30,19 @@ def disable():
                data = TEXT_PRFX + data
             count += 1
             size += media_size
-            conn.cursor().execute('UPDATE messages SET key_remote_jid=?, data=?, media_caption=?, remote_resource=? WHERE _id=?',
-                                  (key_remote_jid, data, media_caption, remote_resource, _id))
+            try:
+               conn.cursor().execute('UPDATE messages SET key_remote_jid=?, data=?, media_caption=?, remote_resource=? WHERE _id=?',
+                                     (key_remote_jid, data, media_caption, remote_resource, _id))
+            except sqlite3.IntegrityError:
+               # Delete older duplicate status update then retry updating newest
+               conn.cursor().execute('DELETE FROM messages WHERE key_id=? AND key_remote_jid IS NOT "status@broadcast"',(key_id,))
+               conn.cursor().execute('UPDATE messages SET key_remote_jid=?, data=?, media_caption=?, remote_resource=? WHERE _id=?',
+                                     (key_remote_jid, data, media_caption, remote_resource, _id))
    return (count, size)
 
 def enable(whitelist_all=False):
    count = size = 0
-   for (_id, key_remote_jid, data, media_mime_type, media_size, media_caption, remote_resource) in statuses:
+   for (_id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource) in statuses:
       caption_split = media_caption.split('|')
       if media_caption and media_caption.startswith(STATUS_PRFX) and (len(caption_split) >= 4):
          remote_resource = caption_split[2]
@@ -48,8 +54,12 @@ def enable(whitelist_all=False):
                data = data.lstrip(TEXT_PRFX)
             count += 1
             size += media_size
-            conn.cursor().execute('UPDATE messages SET key_remote_jid=?, data=?, media_caption=?, remote_resource=? WHERE _id=?',
-                                  (key_remote_jid, data, media_caption, remote_resource, _id))
+            try:
+               conn.cursor().execute('UPDATE messages SET key_remote_jid=?, data=?, media_caption=?, remote_resource=? WHERE _id=?',
+                                     (key_remote_jid, data, media_caption, remote_resource, _id))
+            except sqlite3.IntegrityError:
+               # Just delete older status duplicate and leave newest as is
+               conn.cursor().execute('DELETE FROM messages WHERE key_id=? AND key_remote_jid IS NOT "status@broadcast"',(key_id,))
    return (count, size)
 
 help_msg = """
@@ -99,14 +109,14 @@ else:
       mime_map = {"video/mp4": 'media_mime_type="video/mp4"', "image/jpeg": 'media_mime_type="image/jpeg"', None: 'media_mime_type IS NULL'}
       if cmd == "disable":
          statuses = conn.cursor().execute(
-            'SELECT _id, key_remote_jid, data, media_mime_type, media_size, media_caption, remote_resource\
+            'SELECT _id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource\
             FROM messages WHERE key_remote_jid="status@broadcast" AND ({0}) AND key_from_me=0'.format(" OR ".join([mime_map[x] for x in mime_types]))
          ).fetchall()
          (count, size) = disable()
          conn.commit()
       elif cmd == "enable":
          statuses = conn.cursor().execute(
-            'SELECT _id, key_remote_jid, data, media_mime_type, media_size, media_caption, remote_resource\
+            'SELECT _id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource\
             FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND key_from_me=0'\
             .format(" OR ".join(['key_remote_jid="{0}"'.format(status_mime_pool[x]) for x in mime_types]), " OR ".join([mime_map[x] for x in mime_types]), STATUS_PRFX)
          ).fetchall()
