@@ -9,26 +9,34 @@ whitelist = {"23489848747274"} # Modify this to include numbers to never disable
 
 STATUS_PRFX = "STATUS_MSG" # Message caption to discriminate status vs regular msg
 
-status_pool = "2348083454312@s.whatsapp.net" # Where all statuses should be stored
+TEXT_PRFX = "http://g.gl " # URL message to prefix plain text statuses to enable caption to show
 
-def disable_video():
+mime_types = ["video/mp4", "image/jpeg", None] # Status types to work on (video, image, text)
+
+# Where video statuses, image statuses and text statuses should be stored
+status_mime_pool = {"video/mp4": "2348083454312@s.whatsapp.net", "image/jpeg": "2347053205090@s.whatsapp.net", None: "2348033831003@s.whatsapp.net"}
+
+def disable():
    count = size = 0
-   for (_id, key_remote_jid, media_size, media_caption, remote_resource) in video_statuses:
+   for (_id, key_remote_jid, data, media_mime_type, media_size, media_caption, remote_resource) in statuses:
       if remote_resource.rstrip("@s.whatsapp.net") not in whitelist:
          if (not media_caption) or (media_caption and not media_caption.startswith(STATUS_PRFX)):
-            key_remote_jid = status_pool
+            key_remote_jid = status_mime_pool[media_mime_type]
             media_caption = media_caption if media_caption else ""
             media_caption = "%s|%s|%s|%s"%(STATUS_PRFX, contact_map.get(remote_resource), remote_resource, media_caption)
             remote_resource = None
+            if media_mime_type == None:
+               # Handle for text to show media_caption
+               data = TEXT_PRFX + data
             count += 1
             size += media_size
-            conn.cursor().execute('UPDATE messages SET key_remote_jid=?, media_caption=?, remote_resource=? WHERE _id=?',
-                                  (key_remote_jid, media_caption, remote_resource, _id))
+            conn.cursor().execute('UPDATE messages SET key_remote_jid=?, data=?, media_caption=?, remote_resource=? WHERE _id=?',
+                                  (key_remote_jid, data, media_caption, remote_resource, _id))
    return (count, size)
 
-def enable_video(whitelist_all=False):
+def enable(whitelist_all=False):
    count = size = 0
-   for (_id, key_remote_jid, media_size, media_caption, remote_resource) in video_statuses:
+   for (_id, key_remote_jid, data, media_mime_type, media_size, media_caption, remote_resource) in statuses:
       caption_split = media_caption.split('|')
       if media_caption and media_caption.startswith(STATUS_PRFX) and (len(caption_split) >= 4):
          remote_resource = caption_split[2]
@@ -36,10 +44,12 @@ def enable_video(whitelist_all=False):
             media_caption = "".join(caption_split[3:])
             media_caption = None if not media_caption else media_caption
             key_remote_jid = "status@broadcast"
+            if media_mime_type == None:
+               data = data.lstrip(TEXT_PRFX)
             count += 1
             size += media_size
-            conn.cursor().execute('UPDATE messages SET key_remote_jid=?, media_caption=?, remote_resource=? WHERE _id=?',
-                                  (key_remote_jid, media_caption, remote_resource, _id))
+            conn.cursor().execute('UPDATE messages SET key_remote_jid=?, data=?, media_caption=?, remote_resource=? WHERE _id=?',
+                                  (key_remote_jid, data, media_caption, remote_resource, _id))
    return (count, size)
 
 help_msg = """
@@ -49,7 +59,7 @@ help_msg = """
 
       {0} disable [num num num ...]
 
-            Disable all video statuses except space separated nums
+            Disable all statuses except space separated nums
    
             eg. {0} disable 23483736767836 23480839776864
 
@@ -57,7 +67,7 @@ help_msg = """
 
       {0} enable [num num num ...]
 
-            Enable all video statuses for all space separated nums if disabled
+            Enable all statuses for all space separated nums if disabled
 
             eg. {0} enable 2348083727863 2341234567837
 
@@ -86,23 +96,25 @@ else:
       cmd, nums = sys.argv[1], sys.argv[2:]
       whitelist |= set(nums)
       count, size = 0, 0
+      mime_map = {"video/mp4": 'media_mime_type="video/mp4"', "image/jpeg": 'media_mime_type="image/jpeg"', None: 'media_mime_type IS NULL'}
       if cmd == "disable":
-         video_statuses = conn.cursor().execute(
-            'SELECT _id, key_remote_jid, media_size, media_caption, remote_resource\
-            FROM messages WHERE key_remote_jid="status@broadcast" AND media_mime_type="video/mp4"'
+         statuses = conn.cursor().execute(
+            'SELECT _id, key_remote_jid, data, media_mime_type, media_size, media_caption, remote_resource\
+            FROM messages WHERE key_remote_jid="status@broadcast" AND ({0}) AND key_from_me=0'.format(" OR ".join([mime_map[x] for x in mime_types]))
          ).fetchall()
-         (count, size) = disable_video()
+         (count, size) = disable()
          conn.commit()
       elif cmd == "enable":
-         video_statuses = conn.cursor().execute(
-            'SELECT _id, key_remote_jid, media_size, media_caption, remote_resource\
-            FROM messages WHERE key_remote_jid="{0}" AND media_mime_type="video/mp4" AND media_caption LIKE "{1}%"'.format(status_pool, STATUS_PRFX)
+         statuses = conn.cursor().execute(
+            'SELECT _id, key_remote_jid, data, media_mime_type, media_size, media_caption, remote_resource\
+            FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND key_from_me=0'\
+            .format(" OR ".join(['key_remote_jid="{0}"'.format(status_mime_pool[x]) for x in mime_types]), " OR ".join([mime_map[x] for x in mime_types]), STATUS_PRFX)
          ).fetchall()
-         (count, size) = enable_video(not nums)
+         (count, size) = enable(not nums)
          conn.commit()
       else:
          print ("unknown option, run without arguments to see help file")
       conn.close()
       print ("Done, processed %d statuses of size %.2fMB"%(count, size/1000000.0))
    else:
-      print ("msgstore.db file not found, place in current directory or specify in DB_DIR")
+      print ("msgstore.db and/or wa.db file not found, place in current directory or specify in DB_DIR")
