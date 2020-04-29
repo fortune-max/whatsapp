@@ -84,7 +84,7 @@ def clear(delete_missing=False):
          else:
             print ("Couldn't find path %s, timestamp = %s, media_caption = %s"%(path, timestamp, media_caption))
       # Then delete record in DB
-      if found_file or DELETE_MISSING or delete_missing:
+      if found_file or delete_missing:
          conn.cursor().execute('DELETE FROM messages WHERE _id=?',(_id,))
          conn.cursor().execute('DELETE FROM message_thumbnails WHERE key_id=?',(key_id,))
          count += 1
@@ -113,11 +113,13 @@ help_msg = """
 
       Can also modify whitelist variable to add default numbers not to disable.
 
-      {0} clear [all]
+      {0} clear [all] [1 | 2 | 3 | ...]
 
             Clear disabled statuses older than 24h
 
             all argument means delete status even though media is absent
+
+            number states how many days back statuses should be preserved
    """.format(sys.argv[0])
 
 if len(sys.argv) < 2:
@@ -159,13 +161,16 @@ else:
          (count, size) = enable(not nums)
          conn.commit()
       elif cmd == "clear":
-         PREV_DAY_MS = str(int(time.time() - (24*3600))) + "000"
+         nums.sort()
+         days = int(nums[0]) if nums and nums[0].isdigit() else 1
+         delete_missing = nums[-1] == "all" if nums else DELETE_MISSING
+         PREV_DAY_MS = str(int(time.time() - (days*24*3600))) + "000"
          statuses = conn.cursor().execute(
             'SELECT _id, key_id, timestamp, media_caption, thumb_image FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND timestamp < {3}'\
             .format(" OR ".join(['key_remote_jid="{0}"'.format(status_mime_pool[x]) for x in mime_types]),\
                     " OR ".join([mime_map[x] for x in mime_types]), STATUS_PRFX, PREV_DAY_MS)
          ).fetchall()
-         (count, size) = clear(nums[0] == "all")
+         (count, size) = clear(delete_missing)
          conn.commit()
       else:
          print ("unknown option, run without arguments to see help file")
