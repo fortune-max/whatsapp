@@ -13,6 +13,8 @@ TEXT_PRFX = "http://g.gl " # URL message to prefix plain text statuses to enable
 
 WHATSAPP_DIR = "/sdcard/WhatsApp/" # Folder on internal/external storage where WhatsApp files are stored
 
+DELETE_MISSING = False # In clear operation, continue deletion of record if media is missing
+
 mime_types = ["video/mp4", "image/jpeg", None] # Status types to work on (video, image, text)
 
 # Where video statuses, image statuses and text statuses should be stored
@@ -64,25 +66,28 @@ def enable(whitelist_all=False):
                conn.cursor().execute('DELETE FROM messages WHERE key_id=? AND key_remote_jid IS NOT "status@broadcast"',(key_id,))
    return (count, size)
 
-def clear():
+def clear(delete_missing=False):
    # Only disabled statuses can be cleared
    count = size = 0
-   for (_id, key_id, thumb_image) in statuses:
+   for (_id, key_id, timestamp, media_caption, thumb_image) in statuses:
       # First delete file in storage
+      found_file = False
       file_paths = re.findall("Media/.*\.jpg", str(thumb_image)) + re.findall("Media/.*\.mp4", str(thumb_image))
       file_paths = [(WHATSAPP_DIR + x) for x in file_paths]
       for path in file_paths:
          if os.path.isfile(path):
+            found_file = True
             print ("Deleting " + path)
             size += os.stat(path).st_size
             os.remove(path)
             break
          else:
-            print ("Couldn't find path " + path)
-      # Then delete record in DB TODO
-      conn.cursor().execute('DELETE FROM messages WHERE _id=?',(_id,))
-      conn.cursor().execute('DELETE FROM message_thumbnails WHERE key_id=?',(key_id,))
-      count += 1
+            print ("Couldn't find path %s, timestamp = %s, media_caption = %s"%(path, timestamp, media_caption))
+      # Then delete record in DB
+      if found_file or DELETE_MISSING or delete_missing:
+         conn.cursor().execute('DELETE FROM messages WHERE _id=?',(_id,))
+         conn.cursor().execute('DELETE FROM message_thumbnails WHERE key_id=?',(key_id,))
+         count += 1
    return (count, size)
 
 help_msg = """
@@ -107,6 +112,12 @@ help_msg = """
             Or to enable for everyone {0} enable
 
       Can also modify whitelist variable to add default numbers not to disable.
+
+      {0} clear [all]
+
+            Clear disabled statuses older than 24h
+
+            all argument means delete status even though media is absent
    """.format(sys.argv[0])
 
 if len(sys.argv) < 2:
@@ -150,11 +161,11 @@ else:
       elif cmd == "clear":
          PREV_DAY_MS = str(int(time.time() - (24*3600))) + "000"
          statuses = conn.cursor().execute(
-            'SELECT _id, key_id, thumb_image FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND timestamp < {3}'\
+            'SELECT _id, key_id, timestamp, media_caption, thumb_image FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND timestamp < {3}'\
             .format(" OR ".join(['key_remote_jid="{0}"'.format(status_mime_pool[x]) for x in mime_types]),\
                     " OR ".join([mime_map[x] for x in mime_types]), STATUS_PRFX, PREV_DAY_MS)
          ).fetchall()
-         (count, size) = clear()
+         (count, size) = clear(nums[0] == "all")
          conn.commit()
       else:
          print ("unknown option, run without arguments to see help file")
