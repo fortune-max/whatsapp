@@ -67,20 +67,21 @@ def enable(whitelist_all=False):
 def clear():
    # Only disabled statuses can be cleared
    count = size = 0
-   for (_id, thumb_image) in statuses:
+   for (_id, key_id, thumb_image) in statuses:
       # First delete file in storage
       file_paths = re.findall("Media/.*\.jpg", str(thumb_image)) + re.findall("Media/.*\.mp4", str(thumb_image))
       file_paths = [(WHATSAPP_DIR + x) for x in file_paths]
       for path in file_paths:
          if os.path.isfile(path):
-            print (path)
+            print ("Deleting " + path)
             size += os.stat(path).st_size
-            # os.remove(path)
+            os.remove(path)
             break
          else:
             print ("Couldn't find path " + path)
-      # Then delete record in DB TODO RM THUMBNAIL
-      # conn.cursor().execute('DELETE FROM messages WHERE _id=?',(_id,))
+      # Then delete record in DB TODO
+      conn.cursor().execute('DELETE FROM messages WHERE _id=?',(_id,))
+      conn.cursor().execute('DELETE FROM message_thumbnails WHERE key_id=?',(key_id,))
       count += 1
    return (count, size)
 
@@ -111,7 +112,7 @@ help_msg = """
 if len(sys.argv) < 2:
    print (help_msg)
 else:
-   if not os.path.isfile(DB_DIR):
+   if not os.path.isdir(DB_DIR):
       DB_DIR = "./"
    DB_FILE_MSGSTORE = DB_DIR + "msgstore.db"
    DB_FILE_WA = DB_DIR + "wa.db"
@@ -149,7 +150,7 @@ else:
       elif cmd == "clear":
          PREV_DAY_MS = str(int(time.time() - (24*3600))) + "000"
          statuses = conn.cursor().execute(
-            'SELECT _id, thumb_image FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND timestamp < {3}'\
+            'SELECT _id, key_id, thumb_image FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND timestamp < {3}'\
             .format(" OR ".join(['key_remote_jid="{0}"'.format(status_mime_pool[x]) for x in mime_types]),\
                     " OR ".join([mime_map[x] for x in mime_types]), STATUS_PRFX, PREV_DAY_MS)
          ).fetchall()
