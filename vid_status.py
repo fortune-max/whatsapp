@@ -69,7 +69,7 @@ def enable(whitelist_all=False):
 def clear(delete_missing=False):
    # Only disabled statuses can be cleared
    count = size = 0
-   for (_id, key_id, timestamp, media_caption, thumb_image) in statuses:
+   for (_id, key_id, timestamp, media_mime_type, media_caption, thumb_image) in statuses:
       # First delete file in storage
       found_file = False
       file_paths = re.findall("Media/.*\.jpg", str(thumb_image)) + re.findall("Media/.*\.mp4", str(thumb_image))
@@ -84,9 +84,10 @@ def clear(delete_missing=False):
          else:
             print ("Couldn't find path %s, timestamp = %s, media_caption = %s"%(path, timestamp, media_caption))
       # Then delete record in DB
-      if found_file or delete_missing:
+      if found_file or delete_missing or media_mime_type == None:
+         if media_mime_type:
+            conn.cursor().execute('DELETE FROM message_thumbnails WHERE key_id=?',(key_id,))
          conn.cursor().execute('DELETE FROM messages WHERE _id=?',(_id,))
-         conn.cursor().execute('DELETE FROM message_thumbnails WHERE key_id=?',(key_id,))
          count += 1
    return (count, size)
 
@@ -166,7 +167,7 @@ else:
          delete_missing = nums[-1] == "all" if nums else DELETE_MISSING
          PREV_DAY_MS = str(int(time.time() - (days*24*3600))) + "000"
          statuses = conn.cursor().execute(
-            'SELECT _id, key_id, timestamp, media_caption, thumb_image FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND timestamp < {3}'\
+            'SELECT _id, key_id, timestamp, media_mime_type, media_caption, thumb_image FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND timestamp < {3}'\
             .format(" OR ".join(['key_remote_jid="{0}"'.format(status_mime_pool[x]) for x in mime_types]),\
                     " OR ".join([mime_map[x] for x in mime_types]), STATUS_PRFX, PREV_DAY_MS)
          ).fetchall()
