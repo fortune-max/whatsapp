@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
-import sqlite3, sys, os, time
+import sqlite3, sys, os, time, re
 
 # set WhatsApp Database directory here, uses current directory on failure
 DB_DIR = "/data/data/com.whatsapp/databases/"
@@ -10,6 +10,8 @@ whitelist = {"23489848747274"} # Modify this to include numbers to never disable
 STATUS_PRFX = "STATUS_MSG" # Message caption to discriminate status vs regular msg
 
 TEXT_PRFX = "http://g.gl " # URL message to prefix plain text statuses to enable caption to show
+
+WHATSAPP_DIR = "/sdcard/WhatsApp/" # Folder on internal/external storage where WhatsApp files are stored
 
 mime_types = ["video/mp4", "image/jpeg", None] # Status types to work on (video, image, text)
 
@@ -62,6 +64,26 @@ def enable(whitelist_all=False):
                conn.cursor().execute('DELETE FROM messages WHERE key_id=? AND key_remote_jid IS NOT "status@broadcast"',(key_id,))
    return (count, size)
 
+def clear():
+   # Only disabled statuses can be cleared
+   count = size = 0
+   for (_id, thumb_image) in statuses:
+      # First delete file in storage
+      file_paths = re.findall("Media/.*\.jpg", str(thumb_image)) + re.findall("Media/.*\.mp4", str(thumb_image))
+      file_paths = [(WHATSAPP_DIR + x) for x in file_paths]
+      for path in file_paths:
+         if os.path.isfile(path):
+            print (path)
+            size += os.stat(path).st_size
+            # os.remove(path)
+            break
+         else:
+            print ("Couldn't find path " + path)
+      # Then delete record in DB TODO RM THUMBNAIL
+      # conn.cursor().execute('DELETE FROM messages WHERE _id=?',(_id,))
+      count += 1
+   return (count, size)
+
 help_msg = """
       WhatsApp Status Utility built by lordfme
 
@@ -89,11 +111,11 @@ help_msg = """
 if len(sys.argv) < 2:
    print (help_msg)
 else:
-   if not os.path.exists(DB_DIR):
+   if not os.path.isfile(DB_DIR):
       DB_DIR = "./"
    DB_FILE_MSGSTORE = DB_DIR + "msgstore.db"
    DB_FILE_WA = DB_DIR + "wa.db"
-   if os.path.exists(DB_FILE_MSGSTORE) and os.path.exists(DB_FILE_WA):
+   if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_WA):
       # Keep dictionary holidng contact number to name mapping
       conn_wa = sqlite3.connect(DB_FILE_WA)
       contacts = conn_wa.cursor().execute(
@@ -110,17 +132,28 @@ else:
       if cmd == "disable":
          statuses = conn.cursor().execute(
             'SELECT _id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource\
-            FROM messages WHERE key_remote_jid="status@broadcast" AND ({0}) AND key_from_me=0'.format(" OR ".join([mime_map[x] for x in mime_types]))
+            FROM messages WHERE key_remote_jid="status@broadcast" AND ({0}) AND key_from_me=0'\
+            .format(" OR ".join([mime_map[x] for x in mime_types]))
          ).fetchall()
          (count, size) = disable()
          conn.commit()
       elif cmd == "enable":
          statuses = conn.cursor().execute(
             'SELECT _id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource\
-            FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND key_from_me=0'\
-            .format(" OR ".join(['key_remote_jid="{0}"'.format(status_mime_pool[x]) for x in mime_types]), " OR ".join([mime_map[x] for x in mime_types]), STATUS_PRFX)
+            FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%"'\
+            .format(" OR ".join(['key_remote_jid="{0}"'.format(status_mime_pool[x]) for x in mime_types]),\
+                    " OR ".join([mime_map[x] for x in mime_types]), STATUS_PRFX)
          ).fetchall()
          (count, size) = enable(not nums)
+         conn.commit()
+      elif cmd == "clear":
+         PREV_DAY_MS = str(int(time.time() - (24*3600))) + "000"
+         statuses = conn.cursor().execute(
+            'SELECT _id, thumb_image FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND timestamp < {3}'\
+            .format(" OR ".join(['key_remote_jid="{0}"'.format(status_mime_pool[x]) for x in mime_types]),\
+                    " OR ".join([mime_map[x] for x in mime_types]), STATUS_PRFX, PREV_DAY_MS)
+         ).fetchall()
+         (count, size) = clear()
          conn.commit()
       else:
          print ("unknown option, run without arguments to see help file")
