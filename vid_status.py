@@ -9,7 +9,7 @@ whitelist = {"23489848747274"} # Modify this to include numbers to never disable
 
 STATUS_PRFX = "STATUS_MSG" # Message caption to discriminate status vs regular msg
 
-TEXT_PRFX = "http://g.gl " # URL message to prefix plain text statuses to enable caption to show
+TEXT_PRFX = "http://f.me " # URL message to prefix plain text statuses to enable caption to show
 
 WHATSAPP_DIR = "/sdcard/WhatsApp/" # Folder on internal/external storage where WhatsApp files are stored
 
