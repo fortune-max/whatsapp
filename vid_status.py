@@ -34,7 +34,7 @@ def disable():
                data = "" if not data else data
                data = TEXT_PRFX + data
             else:
-               conn.cursor().execute('UPDATE message_thumbnails SET key_remote_jid=? WHERE key_id=?', (key_remote_jid, key_id))
+               conn.cursor().execute('UPDATE message_thumbnails SET key_remote_jid=? WHERE key_remote_jid=? AND key_id=?', (key_remote_jid, "status@broadcast", key_id))
             count += 1
             size += media_size
             try:
@@ -61,7 +61,7 @@ def enable(whitelist_all=False):
                data = data.lstrip(TEXT_PRFX)
                data = None if not data else data
             else:
-               conn.cursor().execute('UPDATE message_thumbnails SET key_remote_jid=? WHERE key_id=?', (key_remote_jid, key_id))
+               conn.cursor().execute('UPDATE message_thumbnails SET key_remote_jid=? WHERE key_remote_jid=? AND key_id=?', (key_remote_jid, status_mime_pool[media_mime_type], key_id))
             count += 1
             size += media_size
             try:
