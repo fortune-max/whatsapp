@@ -31,6 +31,7 @@ def disable():
             remote_resource = None
             if media_mime_type == None:
                # Handle for text to show media_caption
+               data = "" if not data else data
                data = TEXT_PRFX + data
             else:
                conn.cursor().execute('UPDATE message_thumbnails SET key_remote_jid=? WHERE key_id=?', (key_remote_jid, key_id))
@@ -58,6 +59,7 @@ def enable(whitelist_all=False):
             key_remote_jid = "status@broadcast"
             if media_mime_type == None:
                data = data.lstrip(TEXT_PRFX)
+               data = None if not data else data
             else:
                conn.cursor().execute('UPDATE message_thumbnails SET key_remote_jid=? WHERE key_id=?', (key_remote_jid, key_id))
             count += 1
