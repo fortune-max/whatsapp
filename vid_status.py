@@ -68,7 +68,12 @@ def enable(whitelist_all=False):
                data = data.lstrip(TEXT_PRFX)
                data = None if not data else data
             else:
-               conn.cursor().execute('UPDATE message_thumbnails SET key_remote_jid=? WHERE key_remote_jid=? AND key_id=?', (key_remote_jid, status_mime_pool[media_mime_type], key_id))
+               try:
+                  conn.cursor().execute('UPDATE message_thumbnails SET key_remote_jid=? WHERE key_remote_jid=? AND key_id=?',
+                                        (key_remote_jid, status_mime_pool[media_mime_type], key_id))
+               except sqlite3.IntegrityError:
+                  # Just delete older status thumbnail and leave newest as is
+                  conn.cursor().execute('DELETE FROM message_thumbnails WHERE key_id=? AND key_remote_jid IS NOT "status@broadcast"', (key_id,))
             count += 1
             size += media_size
             try:
