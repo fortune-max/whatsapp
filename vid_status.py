@@ -5,7 +5,7 @@ import sqlite3, sys, os, time, re
 # set WhatsApp Database directory here, uses current directory on failure
 DB_DIR = "/data/data/com.whatsapp/databases/"
 
-whitelist = {"23489848747274"} # Modify this to include numbers to never disable
+whitelist = {"2349030455845", "2348159186070", "2348139319159", "2348022219174", "2348170021596", "2348109143064"} # Modify this to include numbers to never disable
 
 STATUS_PRFX = "STATUS_MSG" # Message caption to discriminate status vs regular msg
 
