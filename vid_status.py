@@ -1,6 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
-import sqlite3, sys, os, time, re
+import sqlite3, sys, os, time, re, argparse
 
 # set WhatsApp Database directory here, uses current directory on failure
 DB_DIR = "/data/data/com.whatsapp/databases/"
@@ -109,37 +109,31 @@ def clear(delete_missing=False):
          count += 1
    return (count, size)
 
-help_msg = """
-      WhatsApp Status Utility built by lordfme
+ap = argparse.ArgumentParser(formatter_class = argparse.RawDescriptionHelpFormatter, 
+description = "Presents status updates as regular WhatsApp messages to allow for storing statuses to view at your own time and/or allowing finer control of which statuses get downloaded.",
+epilog = """Days option can only be used with clear operation, will be ignored otherwise. Only one of these operations can be done at a time (enable, disable or clear), extra operations will be ignored. Enabling statuses only works if status is still present on status roll, WhatsApp removes disabled statuses after a while from status roll.
 
-      Usage
+Examples
 
-      {0} disable [num num num ...]
+%(prog)s -d                 disables statuses currently in status roll and saves as messages
+%(prog)s -d -m 4            disable videos alone (moves video statuses to messages)
+%(prog)s -c                 clear all disabled statuses older than 24h
+%(prog)s -e                 enable statuses previously disabled (moves them back to status roll)
+%(prog)s -e -m 1            enable text statuses previously disabled (moves them back to status roll)
+%(prog)s -c -m 3 -D 2       clear text and image statuses older than 2 days
 
-            Disable all statuses except space separated nums
-   
-            eg. {0} disable 23483736767836 23480839776864
+Disabled statuses can be found here {}
 
-            Or to disable for everyone {0} disable
+Built by lordfme (https://github.com/lordfme/whatsapp)""".format(" ".join(map(lambda x: "http://wa.me/"+x.strip("@s.whatsapp.net"),status_mime_pool.values()))))
 
-      {0} enable [num num num ...]
+ap.add_argument("-d", "--disable", action="store_true", help = "Disable statuses")
+ap.add_argument("-e", "--enable", action="store_true", help = "Enable statuses")
+ap.add_argument("-c", "--clear", action="store_true", help = "Clear disabled statuses")
+ap.add_argument("-D", "--days", default=1, type=int, help = "Clear statuses older than D days ago, default 1")
+ap.add_argument("-m", "--mode", default=7, type=int, help = "Text (1), Images (2), Videos (4), sum to get mimetypes to operate on, default 7 (all)")
 
-            Enable all statuses for all space separated nums if disabled
-
-            eg. {0} enable 2348083727863 2341234567837
-
-            Or to enable for everyone {0} enable
-
-      Can also modify whitelist variable to add default numbers not to disable.
-
-      {0} clear [all] [1 | 2 | 3 | ...]
-
-            Clear disabled statuses older than 24h
-
-            all argument means delete status even though media is absent
-
-            number states how many days back statuses should be preserved
-   """.format(sys.argv[0])
+args = vars(ap.parse_args())
+print ("fme", args)
 
 if len(sys.argv) < 2:
    print (help_msg)
