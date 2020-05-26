@@ -13,8 +13,6 @@ TEXT_PRFX = "http://f.me " # URL message to prefix plain text statuses to enable
 
 WHATSAPP_DIR = "/sdcard/WhatsApp/" # Folder on internal/external storage where WhatsApp files are stored
 
-DELETE_MISSING = False # In clear operation, continue deletion of record if media is missing
-
 mime_types = ["video/mp4", "image/jpeg", None] # Status types to work on (video, image, text)
 
 # Where video statuses, image statuses and text statuses should be stored
@@ -54,47 +52,44 @@ def disable():
                                      (key_remote_jid, data, media_caption, remote_resource, _id))
    return (count, size)
 
-def enable(whitelist_all=False):
+def enable():
    count = size = 0
    for (_id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource) in statuses:
       caption_split = media_caption.split('|')
       if media_caption and media_caption.startswith(STATUS_PRFX) and (len(caption_split) >= 4):
          remote_resource = caption_split[2]
-         if whitelist_all or (remote_resource.rstrip("@s.whatsapp.net") in whitelist):
-            media_caption = "".join(caption_split[3:])
-            media_caption = None if not media_caption else media_caption
-            key_remote_jid = "status@broadcast"
-            if media_mime_type == None:
-               data = data.lstrip(TEXT_PRFX)
-               data = None if not data else data
-            else:
-               try:
-                  conn.cursor().execute('UPDATE message_thumbnails SET key_remote_jid=? WHERE key_remote_jid=? AND key_id=?',
-                                        (key_remote_jid, status_mime_pool[media_mime_type], key_id))
-               except sqlite3.IntegrityError:
-                  # Just delete older status thumbnail and leave newest as is
-                  conn.cursor().execute('DELETE FROM message_thumbnails WHERE key_id=? AND key_remote_jid IS NOT "status@broadcast"', (key_id,))
-            count += 1
-            size += media_size
+         media_caption = "".join(caption_split[3:])
+         media_caption = None if not media_caption else media_caption
+         key_remote_jid = "status@broadcast"
+         if media_mime_type == None:
+            data = data.lstrip(TEXT_PRFX)
+            data = None if not data else data
+         else:
             try:
-               conn.cursor().execute('UPDATE messages SET key_remote_jid=?, data=?, media_caption=?, remote_resource=? WHERE _id=?',
-                                     (key_remote_jid, data, media_caption, remote_resource, _id))
+               conn.cursor().execute('UPDATE message_thumbnails SET key_remote_jid=? WHERE key_remote_jid=? AND key_id=?',
+                                     (key_remote_jid, status_mime_pool[media_mime_type], key_id))
             except sqlite3.IntegrityError:
-               # Just delete older status duplicate and leave newest as is
-               conn.cursor().execute('DELETE FROM messages WHERE key_id=? AND key_remote_jid IS NOT "status@broadcast"',(key_id,))
+               # Just delete older status thumbnail and leave newest as is
+               conn.cursor().execute('DELETE FROM message_thumbnails WHERE key_id=? AND key_remote_jid IS NOT "status@broadcast"', (key_id,))
+         count += 1
+         size += media_size
+         try:
+            conn.cursor().execute('UPDATE messages SET key_remote_jid=?, data=?, media_caption=?, remote_resource=? WHERE _id=?',
+                                  (key_remote_jid, data, media_caption, remote_resource, _id))
+         except sqlite3.IntegrityError:
+            # Just delete older status duplicate and leave newest as is
+            conn.cursor().execute('DELETE FROM messages WHERE key_id=? AND key_remote_jid IS NOT "status@broadcast"',(key_id,))
    return (count, size)
 
-def clear(delete_missing=False):
+def clear():
    # Only disabled statuses can be cleared
    count = size = 0
    for (_id, key_id, timestamp, media_mime_type, media_caption, thumb_image) in statuses:
       # First delete file in storage
-      found_file = False
       file_paths = re.findall("Media/.*\.jpg", str(thumb_image)) + re.findall("Media/.*\.mp4", str(thumb_image))
       file_paths = [(WHATSAPP_DIR + x) for x in file_paths]
       for path in file_paths:
          if os.path.isfile(path):
-            found_file = True
             print ("Deleting " + path)
             size += os.stat(path).st_size
             os.remove(path)
@@ -102,11 +97,10 @@ def clear(delete_missing=False):
          else:
             print ("Couldn't find path %s, timestamp = %s, media_caption = %s"%(path, timestamp, media_caption))
       # Then delete record in DB
-      if found_file or delete_missing or media_mime_type == None:
-         if media_mime_type:
-            conn.cursor().execute('DELETE FROM message_thumbnails WHERE key_id=?',(key_id,))
-         conn.cursor().execute('DELETE FROM messages WHERE _id=?',(_id,))
-         count += 1
+      if media_mime_type:
+         conn.cursor().execute('DELETE FROM message_thumbnails WHERE key_id=?',(key_id,))
+      conn.cursor().execute('DELETE FROM messages WHERE _id=?',(_id,))
+      count += 1
    return (count, size)
 
 ap = argparse.ArgumentParser(formatter_class = argparse.RawDescriptionHelpFormatter, 
@@ -131,63 +125,55 @@ ap.add_argument("-e", "--enable", action="store_true", help = "Enable statuses")
 ap.add_argument("-c", "--clear", action="store_true", help = "Clear disabled statuses")
 ap.add_argument("-D", "--days", default=1, type=int, help = "Clear statuses older than D days ago, default 1")
 ap.add_argument("-m", "--mode", default=7, type=int, help = "Text (1), Images (2), Videos (4), sum to get mimetypes to operate on, default 7 (all)")
-
 args = vars(ap.parse_args())
-print ("fme", args)
 
-if len(sys.argv) < 2:
-   print (help_msg)
-else:
-   if not os.path.isdir(DB_DIR):
-      DB_DIR = "./"
-   DB_FILE_MSGSTORE = DB_DIR + "msgstore.db"
-   DB_FILE_WA = DB_DIR + "wa.db"
-   if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_WA):
-      # Keep dictionary holidng contact number to name mapping
-      conn_wa = sqlite3.connect(DB_FILE_WA)
-      contacts = conn_wa.cursor().execute(
-         'SELECT jid, sort_name FROM wa_contacts WHERE sort_name IS NOT NULL'
+if not os.path.isdir(DB_DIR):
+   DB_DIR = "./"
+DB_FILE_MSGSTORE = DB_DIR + "msgstore.db"
+DB_FILE_WA = DB_DIR + "wa.db"
+if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_WA):
+   # Keep dictionary holidng contact number to name mapping
+   conn_wa = sqlite3.connect(DB_FILE_WA)
+   contacts = conn_wa.cursor().execute(
+      'SELECT jid, sort_name FROM wa_contacts WHERE sort_name IS NOT NULL'
+   ).fetchall()
+   contact_map = dict(contacts)
+   conn_wa.close()
+
+   conn = sqlite3.connect(DB_FILE_MSGSTORE)
+   count, size = 0, 0
+   mime_types = [mime_types[i] for i in range(3) if bin(args['mode'])[2:].zfill(3)[i] == '1']
+   mime_map = {"video/mp4": 'media_mime_type="video/mp4"', "image/jpeg": 'media_mime_type="image/jpeg"', None: 'media_mime_type IS NULL'}
+   if args["disable"]:
+      statuses = conn.cursor().execute(
+         'SELECT _id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource\
+         FROM messages WHERE key_remote_jid="status@broadcast" AND ({0}) AND key_from_me=0'\
+         .format(" OR ".join([mime_map[x] for x in mime_types]))
       ).fetchall()
-      contact_map = dict(contacts)
-      conn_wa.close()
-
-      conn = sqlite3.connect(DB_FILE_MSGSTORE)
-      cmd, nums = sys.argv[1], sys.argv[2:]
-      whitelist |= set(nums)
-      count, size = 0, 0
-      mime_map = {"video/mp4": 'media_mime_type="video/mp4"', "image/jpeg": 'media_mime_type="image/jpeg"', None: 'media_mime_type IS NULL'}
-      if cmd == "disable":
-         statuses = conn.cursor().execute(
-            'SELECT _id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource\
-            FROM messages WHERE key_remote_jid="status@broadcast" AND ({0}) AND key_from_me=0'\
-            .format(" OR ".join([mime_map[x] for x in mime_types]))
-         ).fetchall()
-         (count, size) = disable()
-         conn.commit()
-      elif cmd == "enable":
-         statuses = conn.cursor().execute(
-            'SELECT _id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource\
-            FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%"'\
-            .format(" OR ".join(['key_remote_jid="{0}"'.format(status_mime_pool[x]) for x in mime_types]),\
-                    " OR ".join([mime_map[x] for x in mime_types]), STATUS_PRFX)
-         ).fetchall()
-         (count, size) = enable(not nums)
-         conn.commit()
-      elif cmd == "clear":
-         nums.sort()
-         days = int(nums[0]) if nums and nums[0].isdigit() else 1
-         delete_missing = nums[-1] == "all" if nums else DELETE_MISSING
-         PREV_DAY_MS = str(int(time.time() - (days*24*3600))) + "000"
-         statuses = conn.cursor().execute(
-            'SELECT _id, key_id, timestamp, media_mime_type, media_caption, thumb_image FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND timestamp < {3}'\
-            .format(" OR ".join(['key_remote_jid="{0}"'.format(status_mime_pool[x]) for x in mime_types]),\
-                    " OR ".join([mime_map[x] for x in mime_types]), STATUS_PRFX, PREV_DAY_MS)
-         ).fetchall()
-         (count, size) = clear(delete_missing)
-         conn.commit()
-      else:
-         print ("unknown option, run without arguments to see help file")
-      conn.close()
-      print ("Done, processed %d statuses of size %.2fMB"%(count, size/1000000.0))
+      (count, size) = disable()
+      conn.commit()
+   elif args["enable"]:
+      statuses = conn.cursor().execute(
+         'SELECT _id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource\
+         FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%"'\
+         .format(" OR ".join(['key_remote_jid="{0}"'.format(status_mime_pool[x]) for x in mime_types]),\
+                 " OR ".join([mime_map[x] for x in mime_types]), STATUS_PRFX)
+      ).fetchall()
+      (count, size) = enable()
+      conn.commit()
+   elif args["clear"]:
+      days = args["days"]
+      PREV_DAY_MS = str(int(time.time() - (days*24*3600))) + "000"
+      statuses = conn.cursor().execute(
+         'SELECT _id, key_id, timestamp, media_mime_type, media_caption, thumb_image FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND timestamp < {3}'\
+         .format(" OR ".join(['key_remote_jid="{0}"'.format(status_mime_pool[x]) for x in mime_types]),\
+                 " OR ".join([mime_map[x] for x in mime_types]), STATUS_PRFX, PREV_DAY_MS)
+      ).fetchall()
+      (count, size) = clear()
+      conn.commit()
    else:
-      print ("msgstore.db and/or wa.db file not found, place in current directory or specify in DB_DIR")
+      ap.print_help()
+   conn.close()
+   print ("Done, processed %d statuses of size %.2fMB"%(count, size/1000000.0))
+else:
+   print ("msgstore.db and/or wa.db file not found, place in current directory or specify in DB_DIR")
