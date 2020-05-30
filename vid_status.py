@@ -325,4 +325,3 @@ else:
     print(
         "msgstore.db and/or wa.db file not found, place in current directory or specify in DB_DIR"
     )
-
