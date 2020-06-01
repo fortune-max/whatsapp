@@ -1,6 +1,11 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
-import sqlite3, sys, os, time, re, argparse
+import os
+import re
+import sys
+import time
+import sqlite3
+import argparse
 
 # set WhatsApp Database directory here, uses current directory on failure
 DB_DIR = "/data/data/com.whatsapp/databases/"
@@ -196,22 +201,32 @@ def clear():
 
 ap = argparse.ArgumentParser(
     formatter_class=argparse.RawDescriptionHelpFormatter,
-    description="Presents status updates as regular WhatsApp messages to allow for storing statuses to view at your own time and/or allowing finer control of which statuses get downloaded.",
-    epilog="""Days option can only be used with clear operation, will be ignored otherwise. Only one of these operations can be done at a time (enable, disable or clear), extra operations will be ignored. Enabling statuses only works if status is still present on status roll, WhatsApp removes disabled statuses after a while from status roll.
+    description="""\
+Presents status updates as regular WhatsApp messages to allow for storing statu\
+ses to view at your own time and/or allowing finer control of which statuses ge\
+t downloaded.""",
+    epilog="""\
+Only one of these operations can be done at a time (disable, enable or clear), \
+extra operations will be ignored. Enabling statuses only works if status is sti\
+ll present on status roll, WhatsApp automatically removes disabled statuses aft\
+er a while from status roll. The day option allows for integers or floats and defaults to 1
 
 Examples
 
 %(prog)s -d                 disables statuses currently in status roll and saves as messages
+%(prog)s -d -D 1            same as above, disables statuses within the past 24h
 %(prog)s -d -m 4            disable videos alone (moves video statuses to messages)
+%(prog)s -d -m 4 -D 0.0833  disable video statuses received from the past 0.0833 of a day (last 2 hrs)
 %(prog)s -c                 clear all disabled statuses older than 24h
 %(prog)s -e                 enable statuses previously disabled (moves them back to status roll)
 %(prog)s -e -m 1            enable text statuses previously disabled (moves them back to status roll)
+%(prog)s -e -m 1 -D 0.05    enable text statuses previously disabled within last 1.2 hrs
 %(prog)s -c -m 3 -D 2       clear text and image statuses older than 2 days
 
 Disabled statuses can be found here {}
 
 Built by lordfme (https://github.com/lordfme/whatsapp)""".format(
-        " ".join(
+        ", ".join(
             map(
                 lambda x: "http://wa.me/" + x.strip("@s.whatsapp.net"),
                 status_mime_pool.values(),
@@ -227,7 +242,7 @@ ap.add_argument(
     "-D",
     "--days",
     default=1,
-    type=int,
+    type=float,
     help="Clear statuses older than D days ago, default 1",
 )
 ap.add_argument(
@@ -255,7 +270,8 @@ if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_WA):
     conn_wa.close()
 
     conn = sqlite3.connect(DB_FILE_MSGSTORE)
-    count, size = 0, 0
+    count, size, days = 0, 0, args["days"]
+    PREV_DAY_MS = str(int(time.time() - (days * 24 * 3600))) + "000"
     mime_types = [
         mime_types[i] for i in range(3) if bin(args["mode"])[2:].zfill(3)[i] == "1"
     ]
@@ -268,8 +284,8 @@ if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_WA):
         statuses = (
             conn.cursor()
             .execute(
-                'SELECT _id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource FROM messages WHERE key_remote_jid="status@broadcast" AND ({0}) AND key_from_me=0'.format(
-                    " OR ".join([mime_map[x] for x in mime_types])
+                'SELECT _id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource FROM messages WHERE key_remote_jid="status@broadcast" AND ({0}) AND key_from_me=0 AND timestamp > {1}'.format(
+                    " OR ".join([mime_map[x] for x in mime_types]), PREV_DAY_MS,
                 )
             )
             .fetchall()
@@ -280,7 +296,7 @@ if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_WA):
         statuses = (
             conn.cursor()
             .execute(
-                'SELECT _id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%"'.format(
+                'SELECT _id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource FROM messages WHERE ({0}) AND ({1}) AND media_caption LIKE "{2}%" AND timestamp > {3}'.format(
                     " OR ".join(
                         [
                             'key_remote_jid="{0}"'.format(status_mime_pool[x])
@@ -289,6 +305,7 @@ if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_WA):
                     ),
                     " OR ".join([mime_map[x] for x in mime_types]),
                     STATUS_PRFX,
+                    PREV_DAY_MS,
                 )
             )
             .fetchall()
@@ -296,8 +313,6 @@ if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_WA):
         (count, size) = enable()
         conn.commit()
     elif args["clear"]:
-        days = args["days"]
-        PREV_DAY_MS = str(int(time.time() - (days * 24 * 3600))) + "000"
         statuses = (
             conn.cursor()
             .execute(
