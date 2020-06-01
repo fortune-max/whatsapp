@@ -209,7 +209,8 @@ t downloaded.""",
 Only one of these operations can be done at a time (disable, enable or clear), \
 extra operations will be ignored. Enabling statuses only works if status is sti\
 ll present on status roll, WhatsApp automatically removes disabled statuses aft\
-er a while from status roll. The day option allows for integers or floats and defaults to 1
+er a while from status roll. The day option allows for integers or floats and d\
+efaults to 1
 
 Examples
 
