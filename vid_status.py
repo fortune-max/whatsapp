@@ -22,6 +22,10 @@ whitelist = {
     "2347081584968",
     "2348105073022",
     "2349026885579",
+    "2348149031445",
+    "2349061504462",
+    "2348179338161",
+    "2349022368282",
 }  # Modify this to include numbers to never disable
 
 STATUS_PRFX = "STATUS_MSG"  # Message caption to discriminate status vs regular msg
