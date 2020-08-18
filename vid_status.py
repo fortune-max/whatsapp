@@ -26,6 +26,23 @@ whitelist = {
     "2349061504462",
     "2348179338161",
     "2349022368282",
+    "2348037424118",
+    "2348092528678",
+    "2348051208956",
+    "2348179469614",
+    "13602769431",
+    "2349065075536",
+    "2348146211664",
+    "2348158378037",
+    "2348166122175",
+    "2348106222858",
+    "2347080453821",
+    "905488488167",
+    "2349090282777",
+    "2348154277705",
+    "2347064982500",
+    "2348125060064",
+    "2347035881424",
 }  # Modify this to include numbers to never disable
 
 STATUS_PRFX = "STATUS_MSG"  # Message caption to discriminate status vs regular msg
@@ -44,7 +61,7 @@ mime_types = [
 status_mime_pool = {
     "video/mp4": "2348083454312@s.whatsapp.net",
     "image/jpeg": "2347053205090@s.whatsapp.net",
-    None: "2348033831003@s.whatsapp.net",
+    None: "2348033245052@s.whatsapp.net",
 }
 
 
