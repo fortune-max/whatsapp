@@ -78,9 +78,16 @@ def disable():
         remote_resource,
     ) in statuses:
         if remote_resource.rstrip("@s.whatsapp.net") not in whitelist:
-            if (not media_caption) or (
-                media_caption and not media_caption.startswith(STATUS_PRFX)
-            ):
+            start_id, stop_id = 0, 99999999999
+            if args["unviewed"]:
+                if not (media_caption and media_caption.startswith(STATUS_PRFX)):
+                    stop_id, start_id = conn.cursor().execute(
+                            "SELECT message_table_id, first_unread_message_table_id FROM status_list WHERE key_remote_jid=?",
+                            (remote_resource,),
+                        ).fetchone()
+                    if not (start_id <= _id <= stop_id):
+                        print ("Already viewed some of {}. Ignoring".format(contact_map.get(remote_resource)))
+            if not (media_caption and media_caption.startswith(STATUS_PRFX)) and (start_id <= _id <= stop_id):
                 key_remote_jid = status_mime_pool[media_mime_type]
                 media_caption = media_caption if media_caption else ""
                 media_caption = "%s|%s|%s|%s" % (
@@ -260,6 +267,7 @@ Built by lordfme (https://github.com/lordfme/whatsapp)""".format(
 ap.add_argument("-d", "--disable", action="store_true", help="Disable statuses")
 ap.add_argument("-e", "--enable", action="store_true", help="Enable statuses")
 ap.add_argument("-c", "--clear", action="store_true", help="Clear disabled statuses")
+ap.add_argument("-u", "--unviewed", action="store_true", help="Only store unviewes statuses")
 ap.add_argument(
     "-D",
     "--days",
