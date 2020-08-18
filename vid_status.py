@@ -43,6 +43,7 @@ whitelist = {
     "2347064982500",
     "2348125060064",
     "2347035881424",
+    "2348132455808",
 }  # Modify this to include numbers to never disable
 
 STATUS_PRFX = "STATUS_MSG"  # Message caption to discriminate status vs regular msg
@@ -85,9 +86,7 @@ def disable():
                             "SELECT message_table_id, last_read_message_table_id FROM status_list WHERE key_remote_jid=?",
                             (remote_resource,),
                         ).fetchone()
-                    if not (start_id <= _id <= stop_id):
-                        print ("Already viewed some of {}. Ignoring".format(contact_map.get(remote_resource)))
-            if not (media_caption and media_caption.startswith(STATUS_PRFX)) and (start_id <= _id <= stop_id):
+            if not (media_caption and media_caption.startswith(STATUS_PRFX)) and (start_id < _id <= stop_id):
                 key_remote_jid = status_mime_pool[media_mime_type]
                 media_caption = media_caption if media_caption else ""
                 media_caption = "%s|%s|%s|%s" % (
