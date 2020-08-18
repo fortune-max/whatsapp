@@ -82,7 +82,7 @@ def disable():
             if args["unviewed"]:
                 if not (media_caption and media_caption.startswith(STATUS_PRFX)):
                     stop_id, start_id = conn.cursor().execute(
-                            "SELECT message_table_id, first_unread_message_table_id FROM status_list WHERE key_remote_jid=?",
+                            "SELECT message_table_id, last_read_message_table_id FROM status_list WHERE key_remote_jid=?",
                             (remote_resource,),
                         ).fetchone()
                     if not (start_id <= _id <= stop_id):
