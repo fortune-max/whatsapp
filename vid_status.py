@@ -39,7 +39,6 @@ status_mime_pool = {
 
 
 def disable():
-    print(whitelist - blacklist)
     count = size = 0
     for (
         _id,
