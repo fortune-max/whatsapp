@@ -10,41 +10,13 @@ import argparse
 # set WhatsApp Database directory here, uses current directory on failure
 DB_DIR = "/data/data/com.whatsapp/databases/"
 
-whitelist = {
-    "2349030455845",
-    "2348159186070",
-    "2348139319159",
-    "2348022219174",
-    "2348170021596",
-    "2348109143064",
-    "233542912743",
-    "2349090775802",
-    "2347081584968",
-    "2348105073022",
-    "2349026885579",
-    "2348149031445",
-    "2349061504462",
-    "2348179338161",
-    "2349022368282",
-    "2348037424118",
-    "2348092528678",
-    "2348051208956",
-    "2348179469614",
-    "13602769431",
-    "2349065075536",
-    "2348146211664",
-    "2348158378037",
-    "2348166122175",
-    "2348106222858",
-    "2347080453821",
-    "905488488167",
-    "2349090282777",
-    "2348154277705",
-    "2347064982500",
-    "2348125060064",
-    "2347035881424",
-    "2348132455808",
-}  # Modify this to include numbers to never disable
+whitelist = set([
+
+])  # Modify this to include numbers to never disable
+
+blacklist = set([
+
+]) # Modify this to include numbers to always disable
 
 STATUS_PRFX = "STATUS_MSG"  # Message caption to discriminate status vs regular msg
 
@@ -67,6 +39,7 @@ status_mime_pool = {
 
 
 def disable():
+    print(whitelist - blacklist)
     count = size = 0
     for (
         _id,
@@ -78,7 +51,7 @@ def disable():
         media_caption,
         remote_resource,
     ) in statuses:
-        if remote_resource.rstrip("@s.whatsapp.net") not in whitelist:
+        if remote_resource.rstrip("@s.whatsapp.net") not in (whitelist - blacklist):
             start_id, stop_id = 0, 99999999999
             if args["unviewed"]:
                 if not (media_caption and media_caption.startswith(STATUS_PRFX)):
