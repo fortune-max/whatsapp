@@ -287,6 +287,7 @@ if not os.path.isdir(DB_DIR):
     DB_DIR = "./"
 DB_FILE_MSGSTORE = DB_DIR + "msgstore.db"
 DB_FILE_WA = DB_DIR + "wa.db"
+DB_FILE_CHATSETT = DB_DIR + "chatsettings.db"
 if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_WA):
     # Keep dictionary holidng contact number to name mapping
     conn_wa = sqlite3.connect(DB_FILE_WA)
@@ -297,6 +298,11 @@ if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_WA):
     )
     contact_map = dict(contacts)
     conn_wa.close()
+
+    # Get muted contacts to add to whitelist
+    conn_sett = sqlite3.connect(DB_FILE_CHATSETT)
+    whitelist |= set([x[0].strip("@s.whatsapp.net") for x in conn_sett.cursor().execute("SELECT jid FROM settings WHERE status_muted=1").fetchall()])
+    conn_sett.close()
 
     conn = sqlite3.connect(DB_FILE_MSGSTORE)
     count, size, days = 0, 0, args["days"]
