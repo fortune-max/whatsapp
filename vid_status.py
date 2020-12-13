@@ -1,4 +1,10 @@
-#!/data/data/com.termux/files/usr/bin/env python
+#!/usr/bin/env python3
+
+# ========================TODO===============================
+# Remove using wa.db as nums will be resolved if in groups
+# Arg to operate on muted
+# Arg to specify output GC
+# Feature to save pushed status updates to GC
 
 import os
 import re
@@ -10,13 +16,9 @@ import argparse
 # set WhatsApp Database directory here, uses current directory on failure
 DB_DIR = "/data/data/com.whatsapp/databases/"
 
-whitelist = set([
+whitelist = {None,}  # Modify this to include numbers to never disable
 
-])  # Modify this to include numbers to never disable
-
-blacklist = set([
-
-]) # Modify this to include numbers to always disable
+blacklist = {None,} # Modify this to include numbers to always disable
 
 STATUS_PRFX = "STATUS_MSG"  # Message caption to discriminate status vs regular msg
 
@@ -30,11 +32,11 @@ mime_types = [
     None,
 ]  # Status types to work on (video, image, text)
 
-# Where video statuses, image statuses and text statuses should be stored
+# Where video statuses, image statuses and text statuses should be stored (Group chats)
 status_mime_pool = {
-    "video/mp4": "2348083454312@s.whatsapp.net",
-    "image/jpeg": "2347053205090@s.whatsapp.net",
-    None: "2348033245052@s.whatsapp.net",
+    "video/mp4": "2348083454312-1607815117@g.us",
+    "image/jpeg": "2348083454312-1607785006@g.us",
+    None: "2348083454312-1607815145@g.us",
 }
 
 
@@ -61,13 +63,10 @@ def disable():
             if not (media_caption and media_caption.startswith(STATUS_PRFX)) and (start_id < _id <= stop_id):
                 key_remote_jid = status_mime_pool[media_mime_type]
                 media_caption = media_caption if media_caption else ""
-                media_caption = "%s|%s|%s|%s" % (
+                media_caption = "%s|%s" % (
                     STATUS_PRFX,
-                    contact_map.get(remote_resource),
-                    remote_resource,
                     media_caption,
                 )
-                remote_resource = None
                 if media_mime_type == None:
                     # Handle for text to show media_caption
                     data = "" if not data else data
@@ -92,8 +91,8 @@ def disable():
                 size += media_size
                 try:
                     conn.cursor().execute(
-                        "UPDATE messages SET key_remote_jid=?, data=?, media_caption=?, remote_resource=? WHERE _id=?",
-                        (key_remote_jid, data, media_caption, remote_resource, _id),
+                        "UPDATE messages SET key_remote_jid=?, data=?, media_caption=? WHERE _id=?",
+                        (key_remote_jid, data, media_caption, _id),
                     )
                 except sqlite3.IntegrityError:
                     # Delete older duplicate status update then retry updating newest
@@ -102,8 +101,8 @@ def disable():
                         (key_id,),
                     )
                     conn.cursor().execute(
-                        "UPDATE messages SET key_remote_jid=?, data=?, media_caption=?, remote_resource=? WHERE _id=?",
-                        (key_remote_jid, data, media_caption, remote_resource, _id),
+                        "UPDATE messages SET key_remote_jid=?, data=?, media_caption=?, WHERE _id=?",
+                        (key_remote_jid, data, media_caption, _id),
                     )
     return (count, size)
 
@@ -258,19 +257,8 @@ args = vars(ap.parse_args())
 if not os.path.isdir(DB_DIR):
     DB_DIR = "./"
 DB_FILE_MSGSTORE = DB_DIR + "msgstore.db"
-DB_FILE_WA = DB_DIR + "wa.db"
 DB_FILE_CHATSETT = DB_DIR + "chatsettings.db"
-if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_WA):
-    # Keep dictionary holidng contact number to name mapping
-    conn_wa = sqlite3.connect(DB_FILE_WA)
-    contacts = (
-        conn_wa.cursor()
-        .execute("SELECT jid, sort_name FROM wa_contacts WHERE sort_name IS NOT NULL")
-        .fetchall()
-    )
-    contact_map = dict(contacts)
-    conn_wa.close()
-
+if all([os.path.isfile(x) for x in (DB_FILE_MSGSTORE, DB_FILE_CHATSETT)]):
     # Get muted contacts to add to whitelist
     conn_sett = sqlite3.connect(DB_FILE_CHATSETT)
     whitelist |= set([x[0].strip("@s.whatsapp.net") for x in conn_sett.cursor().execute("SELECT jid FROM settings WHERE status_muted=1").fetchall()])
@@ -345,5 +333,5 @@ if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_WA):
     print("Done, processed %d statuses of size %.2fMB" % (count, size / 1000000.0))
 else:
     print(
-        "msgstore.db and/or wa.db file not found, place in current directory or specify in DB_DIR"
+        "msgstore.db and/or chatsettings.db file not found, place in current directory or specify in DB_DIR"
     )
