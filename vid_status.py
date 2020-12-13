@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/data/data/com.termux/files/usr/bin/env python
 
 # ========================TODO===============================
 # Remove using wa.db as nums will be resolved if in groups
