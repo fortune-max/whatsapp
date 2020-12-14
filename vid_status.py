@@ -20,9 +20,7 @@ whitelist = {None,}  # Modify this to include numbers to never disable
 
 blacklist = {None,} # Modify this to include numbers to always disable
 
-STATUS_PRFX = "STATUS_MSG"  # Message caption to discriminate status vs regular msg
-
-TEXT_PRFX = "http://f.me "  # URL message to prefix plain text statuses to enable caption to show
+STATUS_PRFX = "STATUS_MSG"  # Message caption to discriminate status vs regular msg To be deprecated after Oct statuses cleared
 
 WHATSAPP_DIR = "/sdcard/WhatsApp/"  # Folder on internal/external storage where WhatsApp files are stored
 
@@ -34,7 +32,7 @@ mime_types = [
 
 # Where video statuses, image statuses and text statuses should be stored (Group chats)
 status_mime_pool = {
-    "video/mp4": "2348083454312-1607815117@g.us",
+    "video/mp4": "2348083454312-1607815117@g.us", #"2348083454312@s.whatsapp.net"
     "image/jpeg": "2348083454312-1607785006@g.us",
     None: "2348083454312-1607815145@g.us",
 }
@@ -46,32 +44,20 @@ def disable():
         _id,
         key_remote_jid,
         key_id,
-        data,
         media_mime_type,
         media_size,
-        media_caption,
         remote_resource,
     ) in statuses:
         if remote_resource.rstrip("@s.whatsapp.net") not in (whitelist - blacklist):
             start_id, stop_id = 0, 99999999999
             if args["unviewed"]:
-                if not (media_caption and media_caption.startswith(STATUS_PRFX)):
-                    stop_id, start_id = conn.cursor().execute(
-                            "SELECT message_table_id, last_read_message_table_id FROM status_list WHERE key_remote_jid=?",
-                            (remote_resource,),
-                        ).fetchone()
-            if not (media_caption and media_caption.startswith(STATUS_PRFX)) and (start_id < _id <= stop_id):
+                stop_id, start_id = conn.cursor().execute(
+                        "SELECT message_table_id, last_read_message_table_id FROM status_list WHERE key_remote_jid=?",
+                        (remote_resource,),
+                    ).fetchone()
+            if (start_id < _id <= stop_id):
                 key_remote_jid = status_mime_pool[media_mime_type]
-                media_caption = media_caption if media_caption else ""
-                media_caption = "%s|%s" % (
-                    STATUS_PRFX,
-                    media_caption,
-                )
-                if media_mime_type == None:
-                    # Handle for text to show media_caption
-                    data = "" if not data else data
-                    data = TEXT_PRFX + data
-                else:
+                if media_mime_type != None:
                     try:
                         conn.cursor().execute(
                             "UPDATE message_thumbnails SET key_remote_jid=? WHERE key_remote_jid=? AND key_id=?",
@@ -91,8 +77,8 @@ def disable():
                 size += media_size
                 try:
                     conn.cursor().execute(
-                        "UPDATE messages SET key_remote_jid=?, data=?, media_caption=? WHERE _id=?",
-                        (key_remote_jid, data, media_caption, _id),
+                        "UPDATE messages SET key_remote_jid=? WHERE _id=?",
+                        (key_remote_jid, _id),
                     )
                 except sqlite3.IntegrityError:
                     # Delete older duplicate status update then retry updating newest
@@ -101,8 +87,8 @@ def disable():
                         (key_id,),
                     )
                     conn.cursor().execute(
-                        "UPDATE messages SET key_remote_jid=?, data=?, media_caption=?, WHERE _id=?",
-                        (key_remote_jid, data, media_caption, _id),
+                        "UPDATE messages SET key_remote_jid=? WHERE _id=?",
+                        (key_remote_jid, _id),
                     )
     return (count, size)
 
@@ -279,7 +265,7 @@ if all([os.path.isfile(x) for x in (DB_FILE_MSGSTORE, DB_FILE_CHATSETT)]):
         statuses = (
             conn.cursor()
             .execute(
-                'SELECT _id, key_remote_jid, key_id, data, media_mime_type, media_size, media_caption, remote_resource FROM messages WHERE key_remote_jid="status@broadcast" AND ({0}) AND key_from_me=0 AND timestamp > {1}'.format(
+                'SELECT _id, key_remote_jid, key_id, media_mime_type, media_size, remote_resource FROM messages WHERE key_remote_jid="status@broadcast" AND ({0}) AND key_from_me=0 AND timestamp > {1}'.format(
                     " OR ".join([mime_map[x] for x in mime_types]), PREV_DAY_MS,
                 )
             )
@@ -288,6 +274,7 @@ if all([os.path.isfile(x) for x in (DB_FILE_MSGSTORE, DB_FILE_CHATSETT)]):
         (count, size) = disable()
         conn.commit()
     elif args["enable"]:
+        raise Exception
         statuses = (
             conn.cursor()
             .execute(
