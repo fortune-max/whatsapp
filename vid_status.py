@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/env python
 
 # ========================TODO===============================
-# Feature to save pushed status updates to GC
+# Feature to save my status updates to GC
 
 # Run this SQL query on your DB to ensure thumbnails of cleared statuses don't clutter DB
 # CREATE TRIGGER messages_bd_for_message_thumbnails_trigger BEFORE DELETE ON messages BEGIN DELETE FROM message_thumbnails WHERE key_id=old.key_id;
@@ -24,9 +24,29 @@ status_mime_pool = {
 } # Where video statuses, image statuses and text statuses should be stored in (Group chats)
 
 
+def store():
+    count = size = 0
+    for (_id, key_remote_jid, key_id, media_mime_type, media_size, thumb_image, remote_resource) in statuses:
+        if remote_resource.rstrip("@s.whatsapp.net") in (whitelist - blacklist):
+            continue
+        start_id, stop_id = 0, 99999999999
+        if args["unviewed"]:
+            stop_id, start_id = sql(f"SELECT message_table_id, last_read_message_table_id FROM status_list WHERE key_remote_jid='{remote_resource}'", 0)()
+        if (start_id < _id <= stop_id) and media_mime_type:
+            if re.findall("Media/.*\.jpg", str(thumb_image)) + re.findall("Media/.*\.mp4", str(thumb_image)):
+                continue # Don't disable already downloaded statuses
+            try:
+                sql(f"INSERT into message_media (message_row_id, direct_path) VALUES ({_id}, 'STATUS_MSG')")
+            except sqlite3.IntegrityError:
+                link = "STATUS_MSG" + sql(f"SELECT direct_path FROM message_media WHERE message_row_id={_id}", 0)()[0]
+                sql(f"UPDATE message_media SET direct_path='{link}' WHERE message_row_id={_id}")
+            count += 1; size += media_size
+    return (count, size)
+
+
 def disable():
     count = size = 0
-    for (_id, key_remote_jid, key_id, media_mime_type, media_size, remote_resource) in statuses:
+    for (_id, key_remote_jid, key_id, media_mime_type, media_size, thumb_image, remote_resource) in statuses:
         if remote_resource.rstrip("@s.whatsapp.net") in (whitelist - blacklist):
             continue
         start_id, stop_id = 0, 99999999999
@@ -34,7 +54,7 @@ def disable():
             stop_id, start_id = sql(f"SELECT message_table_id, last_read_message_table_id FROM status_list WHERE key_remote_jid='{remote_resource}'", 0)()
         if (start_id < _id <= stop_id):
             key_remote_jid = status_mime_pool[media_mime_type]
-            if media_mime_type != None:
+            if media_mime_type:
                 try:
                     sql(f"UPDATE message_thumbnails SET key_remote_jid='{key_remote_jid}' WHERE key_remote_jid='status@broadcast' AND key_id='{key_id}'")
                 except sqlite3.IntegrityError:
@@ -93,8 +113,8 @@ ap.add_argument("-e", "--enable", action="store_true", help="Enable statuses")
 ap.add_argument("-s", "--store", action="store_true", help="Store statuses")
 ap.add_argument("-r", "--restore", action="store_true", help="Restore statuses")
 ap.add_argument("-c", "--clear", action="store_true", help="Clear disabled statuses")
-ap.add_argument("-u", "--unviewed", action="store_true", help="Only store unviewes statuses")
-ap.add_argument("-M", "--muted", action="store_true", help="Also operate on muted statuses")
+ap.add_argument("-u", "--unviewed", action="store_true", help="Only store unviewed statuses")
+ap.add_argument("-M", "--muted", action="store_true", help="Only operate on muted statuses")
 ap.add_argument("-D", "--days", default=1, type=float, help="Clear statuses older than D days ago, default 1")
 ap.add_argument("-m", "--mode", default=7, type=int, help="Text (1), Images (2), Videos (4), sum to get mimetypes to operate on, default 7 (all)")
 args = vars(ap.parse_args())
@@ -104,11 +124,14 @@ DB_FILE_MSGSTORE = DB_DIR + "msgstore.db"
 DB_FILE_CHATSETT = DB_DIR + "chatsettings.db"
 
 if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_CHATSETT):
-    if not args["muted"]:
-        # Get muted contacts to add to whitelist
-        conn_sett = sqlite3.connect(DB_FILE_CHATSETT)
+    conn_sett = sqlite3.connect(DB_FILE_CHATSETT)
+    if args["muted"]:
+        # Get muted contacts to add to whitelist, work on only muted
+        blacklist |= set([x[0].strip("@s.whatsapp.net") for x in conn_sett.cursor().execute("SELECT jid FROM settings WHERE status_muted=1").fetchall()])
+    else:
+        # Get muted contacts to add to whitelist, work on only unmuted
         whitelist |= set([x[0].strip("@s.whatsapp.net") for x in conn_sett.cursor().execute("SELECT jid FROM settings WHERE status_muted=1").fetchall()])
-        conn_sett.close()
+    conn_sett.close()
 
     count, size, days = 0, 0, args["days"]
     PREV_DAY_MS = str(int(time.time() - (days * 24 * 3600))) + "000"
@@ -118,7 +141,7 @@ if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_CHATSETT):
         "image/jpeg": 'media_mime_type="image/jpeg"',
         None: "media_mime_type IS NULL",
     }
-    able = "_id, key_remote_jid, key_id, media_mime_type, media_size, remote_resource"
+    able = "_id, key_remote_jid, key_id, media_mime_type, media_size, thumb_image, remote_resource"
     mimes = " OR ".join([mime_map[x] for x in mime_types])
     conn = sqlite3.connect(DB_FILE_MSGSTORE)
     sql = lambda cmd, all=True: getattr(conn.cursor().execute(cmd), "fetchall" if all else "fetchone")
