@@ -36,13 +36,15 @@ def disable():
             if re.findall("Media/.*\.jpg", str(thumb_image)) + re.findall("Media/.*\.mp4", str(thumb_image)):
                 continue # Don't disable already downloaded statuses
             try:
-                sql(f"INSERT into message_media (message_row_id, file_size, direct_path) VALUES ({_id}, {media_size}, 'STATUS_MSG')")
+                sql(f"INSERT into message_media (message_row_id, file_size, direct_path, mime_type) VALUES ({_id}, {media_size}, 'STATUS_MSG', '{media_mime_type}')")
             except sqlite3.IntegrityError:
-                direct_path = sql(f"SELECT direct_path FROM message_media WHERE message_row_id={_id}", 0)()[0]
-                if direct_path.startswith("STATUS_MSG"):
-                    continue
-                direct_path = "STATUS_MSG" + direct_path
-                sql(f"UPDATE message_media SET direct_path='{direct_path}', file_size={media_size} WHERE message_row_id={_id}")
+                sql(f"DELETE FROM message_media where message_row_id={_id}")
+                sql(f"INSERT into message_media (message_row_id, file_size, direct_path, mime_type) VALUES ({_id}, {media_size}, 'STATUS_MSG', '{media_mime_type}')")
+                # direct_path = sql(f"SELECT direct_path FROM message_media WHERE message_row_id={_id}", 0)()[0]
+                # if direct_path.startswith("STATUS_MSG"):
+                #     continue
+                # direct_path = "STATUS_MSG" + direct_path
+                # sql(f"UPDATE message_media SET direct_path='{direct_path}', file_size={media_size} WHERE message_row_id={_id}")
             count += 1; size += media_size
     return (count, size)
 
@@ -53,8 +55,8 @@ def enable():
         if direct_path == "STATUS_MSG":
             sql(f"DELETE FROM message_media WHERE message_row_id={message_row_id}")
         else:
-            direct_path = direct_path.lstrip("STATUS_MSG")
-            sql(f"UPDATE message_media SET direct_path='{direct_path}' WHERE message_row_id={message_row_id}")
+            # direct_path = direct_path.lstrip("STATUS_MSG")
+            # sql(f"UPDATE message_media SET direct_path='{direct_path}' WHERE message_row_id={message_row_id}")
         count += 1; size += file_size
     return (count, size)
 
