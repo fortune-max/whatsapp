@@ -24,7 +24,7 @@ status_mime_pool = {
 } # Where video statuses, image statuses and text statuses should be stored in (Group chats)
 
 
-def store():
+def disable():
     count = size = 0
     for (_id, key_remote_jid, key_id, media_mime_type, media_size, thumb_image, remote_resource) in statuses:
         if remote_resource.rstrip("@s.whatsapp.net") in (whitelist - blacklist):
@@ -36,15 +36,30 @@ def store():
             if re.findall("Media/.*\.jpg", str(thumb_image)) + re.findall("Media/.*\.mp4", str(thumb_image)):
                 continue # Don't disable already downloaded statuses
             try:
-                sql(f"INSERT into message_media (message_row_id, direct_path) VALUES ({_id}, 'STATUS_MSG')")
+                sql(f"INSERT into message_media (message_row_id, file_size, direct_path) VALUES ({_id}, {media_size}, 'STATUS_MSG')")
             except sqlite3.IntegrityError:
-                link = "STATUS_MSG" + sql(f"SELECT direct_path FROM message_media WHERE message_row_id={_id}", 0)()[0]
-                sql(f"UPDATE message_media SET direct_path='{link}' WHERE message_row_id={_id}")
+                direct_path = sql(f"SELECT direct_path FROM message_media WHERE message_row_id={_id}", 0)()[0]
+                if direct_path.startswith("STATUS_MSG"):
+                    continue
+                direct_path = "STATUS_MSG" + direct_path
+                sql(f"UPDATE message_media SET direct_path='{direct_path}', file_size={media_size} WHERE message_row_id={_id}")
             count += 1; size += media_size
     return (count, size)
 
 
-def disable():
+def enable():
+    count = size = 0
+    for (message_row_id, file_size, direct_path) in statuses:
+        if direct_path == "STATUS_MSG":
+            sql(f"DELETE FROM message_media WHERE message_row_id={message_row_id}")
+        else:
+            direct_path = direct_path.lstrip("STATUS_MSG")
+            sql(f"UPDATE message_media SET direct_path='{direct_path}' WHERE message_row_id={message_row_id}")
+        count += 1; size += file_size
+    return (count, size)
+
+
+def store():
     count = size = 0
     for (_id, key_remote_jid, key_id, media_mime_type, media_size, thumb_image, remote_resource) in statuses:
         if remote_resource.rstrip("@s.whatsapp.net") in (whitelist - blacklist):
@@ -141,16 +156,29 @@ if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_CHATSETT):
         "image/jpeg": 'media_mime_type="image/jpeg"',
         None: "media_mime_type IS NULL",
     }
-    able = "_id, key_remote_jid, key_id, media_mime_type, media_size, thumb_image, remote_resource"
+    mime_map_2 = {
+        "video/mp4": 'mime_type="video/mp4"',
+        "image/jpeg": 'mime_type="image/jpeg"',
+        None: "mime_type IS NULL",
+    }
     mimes = " OR ".join([mime_map[x] for x in mime_types])
+    mimes_2 = " OR ".join([mime_map_2[x] for x in mime_types])
     conn = sqlite3.connect(DB_FILE_MSGSTORE)
     sql = lambda cmd, all=True: getattr(conn.cursor().execute(cmd), "fetchall" if all else "fetchone")
+
     if args["disable"]:
-        statuses = sql(f'SELECT {able} FROM messages WHERE key_remote_jid="status@broadcast" AND ({mimes}) AND key_from_me=0 AND timestamp > {PREV_DAY_MS}')()
+        params = "_id, key_remote_jid, key_id, media_mime_type, media_size, thumb_image, remote_resource"
+        statuses = sql(f'SELECT {params} FROM messages WHERE key_remote_jid="status@broadcast" AND ({mimes}) AND key_from_me=0 AND timestamp > {PREV_DAY_MS}')()
         (count, size) = disable()
         conn.commit()
+    elif args["enable"]:
+        params = "message_row_id, file_size, direct_path"
+        statuses = sql(f'SELECT {params} FROM message_media WHERE direct_path LIKE "STATUS_MSG%" AND ({mimes_2})')()
+        (count, size) = enable()
+        conn.commit()
     elif args["store"]:
-        statuses = sql(f'SELECT {able} FROM messages WHERE key_remote_jid="status@broadcast" AND ({mimes}) AND key_from_me=0 AND timestamp > {PREV_DAY_MS}')()
+        params = "_id, key_remote_jid, key_id, media_mime_type, media_size, thumb_image, remote_resource"
+        statuses = sql(f'SELECT {params} FROM messages WHERE key_remote_jid="status@broadcast" AND ({mimes}) AND key_from_me=0 AND timestamp > {PREV_DAY_MS}')()
         (count, size) = store()
         conn.commit()
     else:
