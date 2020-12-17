@@ -13,8 +13,7 @@ import sqlite3
 import argparse
 
 DB_DIR = "/data/data/com.whatsapp/databases/" # WhatsApp DB directory
-whitelist = {None,} # Modify this to include numbers to never disable
-blacklist = {None,} # Modify this to include numbers to always disable
+muted = {None,}
 WHATSAPP_DIR = "/sdcard/WhatsApp/"  # WhatsApp folder on local storage
 mime_types = ["video/mp4", "image/jpeg",None] # Status types to work on (video, image, text)
 status_mime_pool = {
@@ -27,7 +26,8 @@ status_mime_pool = {
 def disable():
     count = size = 0
     for (_id, key_remote_jid, key_id, media_mime_type, media_size, thumb_image, remote_resource) in statuses:
-        if remote_resource.rstrip("@s.whatsapp.net") in (whitelist - blacklist):
+        num = remote_resource.rstrip("@s.whatsapp.net")
+        if (args["muted"] and num not in muted) or (not args["muted"] and num in muted):
             continue
         start_id, stop_id = 0, 99999999999
         if args["unviewed"]:
@@ -40,11 +40,6 @@ def disable():
             except sqlite3.IntegrityError:
                 sql(f"DELETE FROM message_media where message_row_id={_id}")
                 sql(f"INSERT into message_media (message_row_id, file_size, direct_path, mime_type) VALUES ({_id}, {media_size}, 'STATUS_MSG', '{media_mime_type}')")
-                # direct_path = sql(f"SELECT direct_path FROM message_media WHERE message_row_id={_id}", 0)()[0]
-                # if direct_path.startswith("STATUS_MSG"):
-                #     continue
-                # direct_path = "STATUS_MSG" + direct_path
-                # sql(f"UPDATE message_media SET direct_path='{direct_path}', file_size={media_size} WHERE message_row_id={_id}")
             count += 1; size += media_size
     return (count, size)
 
@@ -54,17 +49,15 @@ def enable():
     for (message_row_id, file_size, direct_path) in statuses:
         if direct_path == "STATUS_MSG":
             sql(f"DELETE FROM message_media WHERE message_row_id={message_row_id}")
-        else:
-            # direct_path = direct_path.lstrip("STATUS_MSG")
-            # sql(f"UPDATE message_media SET direct_path='{direct_path}' WHERE message_row_id={message_row_id}")
-        count += 1; size += file_size
+            count += 1; size += file_size
     return (count, size)
 
 
 def store():
     count = size = 0
     for (_id, key_remote_jid, key_id, media_mime_type, media_size, thumb_image, remote_resource) in statuses:
-        if remote_resource.rstrip("@s.whatsapp.net") in (whitelist - blacklist):
+        num = remote_resource.rstrip("@s.whatsapp.net")
+        if (args["muted"] and num not in muted) or (not args["muted"] and num in muted):
             continue
         start_id, stop_id = 0, 99999999999
         if args["unviewed"]:
@@ -142,12 +135,7 @@ DB_FILE_CHATSETT = DB_DIR + "chatsettings.db"
 
 if os.path.isfile(DB_FILE_MSGSTORE) and os.path.isfile(DB_FILE_CHATSETT):
     conn_sett = sqlite3.connect(DB_FILE_CHATSETT)
-    if args["muted"]:
-        # Get muted contacts to add to whitelist, work on only muted
-        blacklist |= set([x[0].strip("@s.whatsapp.net") for x in conn_sett.cursor().execute("SELECT jid FROM settings WHERE status_muted=1").fetchall()])
-    else:
-        # Get muted contacts to add to whitelist, work on only unmuted
-        whitelist |= set([x[0].strip("@s.whatsapp.net") for x in conn_sett.cursor().execute("SELECT jid FROM settings WHERE status_muted=1").fetchall()])
+    muted |= set([x[0].strip("@s.whatsapp.net") for x in conn_sett.cursor().execute("SELECT jid FROM settings WHERE status_muted=1").fetchall()])
     conn_sett.close()
 
     count, size, days = 0, 0, args["days"]
